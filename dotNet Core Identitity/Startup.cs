@@ -1,5 +1,6 @@
 using dotNet_Core_Identitity.CustomValidation;
 using dotNet_Core_Identitity.Models;
+using dotNet_Core_Identitity.Service;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -30,11 +31,13 @@ namespace dotNet_Core_Identitity
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddScoped<TwoFactorService>();
+
             services.AddTransient<IAuthorizationHandler, ExpireDateExchangeHandler>();
             services.AddDbContext<AppIdentityDbContext>(opts =>
             {
-                //opts.UseSqlServer(configuration["ConnectionStrings:DefaultConnectionStrings"]);
-                opts.UseSqlServer(configuration["ConnectionStrings:DefaultAzureConnectionStrings"]);
+                opts.UseSqlServer(configuration["ConnectionStrings:DefaultConnectionStrings"]);
+                //opts.UseSqlServer(configuration["ConnectionStrings:DefaultAzureConnectionStrings"]);
             });
 
             services.AddAuthorization(opts =>
@@ -137,6 +140,7 @@ namespace dotNet_Core_Identitity
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
+                app.UseBrowserLink();
             }
 
             app.UseStatusCodePages();

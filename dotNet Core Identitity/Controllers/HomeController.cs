@@ -87,7 +87,6 @@ namespace dotNet_Core_Identitity.Controllers
         }
 
 
-        [HttpGet]
         public IActionResult SignUp()
         {
 
@@ -109,6 +108,7 @@ namespace dotNet_Core_Identitity.Controllers
                 user.UserName = userViewModel.UserName;
                 user.Email = userViewModel.Email;
                 user.PhoneNumber = userViewModel.PhoneNumber;
+                user.TwoFactor = 0;
 
 
                 IdentityResult result = await userManager.CreateAsync(user, userViewModel.Password);

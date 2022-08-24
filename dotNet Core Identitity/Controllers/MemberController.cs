@@ -13,15 +13,17 @@ using dotNet_Core_Identitity.Enums;
 using Microsoft.AspNetCore.Http;
 using System.IO;
 using System.Security.Claims;
+using dotNet_Core_Identitity.Service;
 
 namespace dotNet_Core_Identitity.Controllers
 {
     [Authorize]
     public class MemberController : BaseController
     {
-
-        public MemberController(UserManager<AppUser> userManager, SignInManager<AppUser> signInManager) : base(userManager, signInManager)
+        private readonly TwoFactorService _twoFactorService;
+        public MemberController(UserManager<AppUser> userManager, SignInManager<AppUser> signInManager, TwoFactorService twoFactorService) : base(userManager, signInManager)
         {
+            _twoFactorService = twoFactorService;
         }
 
         public IActionResult Index()
@@ -213,6 +215,54 @@ namespace dotNet_Core_Identitity.Controllers
         public IActionResult Exchange()
         {
             return View();
+        }
+        //Google ve microsoft için authenticator
+        public async Task<IActionResult> TwoFactorWithAuthenticator()
+        {
+            string unformattedKey = await userManager.GetAuthenticatorKeyAsync(CurrentUser);
+
+            if (string.IsNullOrEmpty(unformattedKey))
+            {
+                await userManager.ResetAuthenticatorKeyAsync(CurrentUser);
+                unformattedKey = await userManager.GetAuthenticatorKeyAsync(CurrentUser);
+            }
+            AuthenticatorViewModel authenticatorViewModel = new AuthenticatorViewModel();
+
+            authenticatorViewModel.SharedKey = unformattedKey;
+
+            authenticatorViewModel.AuthenticatorUri = _twoFactorService.GenerateQrCodeUri(CurrentUser.Email, unformattedKey);
+
+            return View(authenticatorViewModel);
+        }
+        [HttpPost]
+        public async Task<IActionResult> TwoFactorWithAuthenticator(AuthenticatorViewModel authenticatorVM)
+        {
+            return View();
+        }
+
+        public IActionResult TwoFactorAuth()
+        {
+            return View(new AuthenticatorViewModel() { TwoFactorType = (TwoFactor)CurrentUser.TwoFactor });
+        }
+        [HttpPost]
+        public async Task<IActionResult> TwoFactorAuth(AuthenticatorViewModel authenticatorVM)
+        {
+            switch (authenticatorVM.TwoFactorType)
+            {
+                case TwoFactor.None:
+                    CurrentUser.TwoFactorEnabled = false;
+                    CurrentUser.TwoFactor = (sbyte?)TwoFactor.None;
+                    TempData["message"] = "İki adımlı kimlik doğrulama tipiniz hiçbiri olarak belirlenmiştir";
+                    break;
+                case TwoFactor.MicrosoftGoogle:
+                    return RedirectToAction("TwoFactorWithAuthenticator");
+                default:
+                    break;
+            }
+
+            await userManager.UpdateAsync(CurrentUser);
+
+            return View(authenticatorVM);
         }
     }
 }
