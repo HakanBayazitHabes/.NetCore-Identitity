@@ -31,8 +31,8 @@ namespace dotNet_Core_Identitity
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.Configure<TwoFactorOptions>(configuration.GetSection("TwoFactorOptions"));
             services.AddScoped<TwoFactorService>();
-
             services.AddTransient<IAuthorizationHandler, ExpireDateExchangeHandler>();
             services.AddDbContext<AppIdentityDbContext>(opts =>
             {
