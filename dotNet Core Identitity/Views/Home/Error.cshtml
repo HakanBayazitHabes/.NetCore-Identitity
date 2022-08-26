@@ -1,0 +1,16 @@
+﻿@model List<string>
+@{
+    ViewData["Title"] = "Error";
+}
+
+<h3>Beklenmedik bir hata meydana Geldi</h3>
+<hr />
+<div class="alert alert-danger">
+    <ul>
+        @foreach (var item in Model)
+        {
+            <li>@item</li>
+        }
+    </ul>
+</div>
+<a class="btn btn-outline-info" asp-action="LogIn">Login Ekranına Dön</a>
