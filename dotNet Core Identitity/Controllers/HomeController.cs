@@ -72,7 +72,7 @@ namespace dotNet_Core_Identitity.Controllers
                             if (user.TwoFactor == (int)TwoFactor.Email || user.TwoFactor == (int)(TwoFactor.Phone))
                             {
                                 HttpContext.Session.Remove("currentTime");
-                            }
+                        }
                             return RedirectToAction("TwoFactorLogIn", "Home", new { ReturnUrl = TempData["ReturnUrl"].ToString() });
                         }
                         else
