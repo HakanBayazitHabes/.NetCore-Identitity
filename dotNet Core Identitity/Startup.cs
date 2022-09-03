@@ -1,5 +1,6 @@
 using dotNet_Core_Identitity.CustomValidation;
 using dotNet_Core_Identitity.Models;
+using dotNet_Core_Identitity.Service;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -30,11 +31,15 @@ namespace dotNet_Core_Identitity
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.Configure<TwoFactorOptions>(configuration.GetSection("TwoFactorOptions"));
+            services.AddScoped<EmailSender>();
+            services.AddScoped<TwoFactorService>();
+            services.AddScoped<SmsSender>();
             services.AddTransient<IAuthorizationHandler, ExpireDateExchangeHandler>();
             services.AddDbContext<AppIdentityDbContext>(opts =>
             {
-                //opts.UseSqlServer(configuration["ConnectionStrings:DefaultConnectionStrings"]);
-                opts.UseSqlServer(configuration["ConnectionStrings:DefaultAzureConnectionStrings"]);
+                opts.UseSqlServer(configuration["ConnectionStrings:DefaultConnectionStrings"]);
+                //opts.UseSqlServer(configuration["ConnectionStrings:DefaultAzureConnectionStrings"]);
             });
 
             services.AddAuthorization(opts =>
@@ -103,7 +108,11 @@ namespace dotNet_Core_Identitity
             //services.AddTransient IClaimsTransformation ile her karþýlaþtýðýnda ClaimsProvider nesnesi üretir..Performansý azaltýcý etkisi vardýr 
             //services.AddSingleton uygulama bir kez ayaða kalktýðý zaman üretilir.Program boyunca sadece bir defa üretilir
             //services.AddRazorPages();
-            services.AddSession();
+            services.AddSession(options =>
+            {
+                options.IdleTimeout = TimeSpan.FromMinutes(30);
+                options.Cookie.Name = "MainSession";
+            });
             services.AddMvc(); // AddMvcCore 'dan farký uygulamayla ilgili tüm servisleri kurar. AddMvcCore kurmaz sizden kurmanýzý bekler
             services.AddMvc(options => options.EnableEndpointRouting = false);
         }
@@ -137,6 +146,7 @@ namespace dotNet_Core_Identitity
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
+                app.UseBrowserLink();
             }
 
             app.UseStatusCodePages();

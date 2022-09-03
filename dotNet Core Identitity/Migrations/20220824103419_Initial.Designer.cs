@@ -10,7 +10,7 @@ using dotNet_Core_Identitity.Models;
 namespace dotNet_Core_Identitity.Migrations
 {
     [DbContext(typeof(AppIdentityDbContext))]
-    [Migration("20220823101758_Initial")]
+    [Migration("20220824103419_Initial")]
     partial class Initial
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -208,6 +208,9 @@ namespace dotNet_Core_Identitity.Migrations
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<short?>("TwoFactor")
+                        .HasColumnType("smallint");
 
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
