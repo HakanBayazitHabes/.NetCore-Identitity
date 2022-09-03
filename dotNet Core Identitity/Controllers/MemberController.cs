@@ -237,9 +237,30 @@ namespace dotNet_Core_Identitity.Controllers
         [HttpPost]
         public async Task<IActionResult> TwoFactorWithAuthenticator(AuthenticatorViewModel authenticatorVM)
         {
-            return View();
-        }
+            var verificationCode = authenticatorVM.VerificationCode.Replace("", string.Empty).Replace("-", string.Empty);
 
+            var is2FATokenValid = await userManager.VerifyTwoFactorTokenAsync(CurrentUser, userManager.Options.Tokens.AuthenticatorTokenProvider, verificationCode);
+
+            if (is2FATokenValid)
+            {
+                CurrentUser.TwoFactorEnabled = true;
+                CurrentUser.TwoFactor = (sbyte)TwoFactor.MicrosoftGoogle;
+
+                var recoveryCodes = await userManager.GenerateNewTwoFactorRecoveryCodesAsync(CurrentUser, 5);
+
+                TempData["recoveryCodes"] = recoveryCodes;
+                TempData["message"] = "İki adımlı kimlik doğrulama tipiniz Microsoft/Google Authenticator olarak belirlenmiştir";
+
+                return RedirectToAction("TwoFactorAuth");
+            }
+            else
+            {
+                ModelState.AddModelError("", "Girdiğiniz doğrulama kodu yanlıştır.");
+                return View(authenticatorVM);
+
+            }
+
+        }
         public IActionResult TwoFactorAuth()
         {
             return View(new AuthenticatorViewModel() { TwoFactorType = (TwoFactor)CurrentUser.TwoFactor });
@@ -251,8 +272,23 @@ namespace dotNet_Core_Identitity.Controllers
             {
                 case TwoFactor.None:
                     CurrentUser.TwoFactorEnabled = false;
-                    CurrentUser.TwoFactor = (sbyte?)TwoFactor.None;
+                    CurrentUser.TwoFactor = (sbyte)TwoFactor.None;
                     TempData["message"] = "İki adımlı kimlik doğrulama tipiniz hiçbiri olarak belirlenmiştir";
+                    break;
+                case TwoFactor.Phone:
+                    if (string.IsNullOrEmpty(CurrentUser.PhoneNumber))
+                    {
+                        ViewBag.warning = "Telefon numaranız belirtilmemiştir.Lütfen kullanıcı güncelleme sayfasından telefon numaranızı belirtiniz";
+                    }
+                    CurrentUser.TwoFactorEnabled = true;
+                    CurrentUser.TwoFactor = (int)TwoFactor.Phone;
+                    TempData["message"] = "İki adımlı kimlik doğrulama tipiniz telefon olarak belirlenmiştir.";
+                    break;
+
+                case TwoFactor.Email:
+                    CurrentUser.TwoFactorEnabled = true;
+                    CurrentUser.TwoFactor = (sbyte)TwoFactor.Email;
+                    TempData["message"] = "İki adımlı kimlik doğrulama tipiniz email olarak belirlenmiştir.";
                     break;
                 case TwoFactor.MicrosoftGoogle:
                     return RedirectToAction("TwoFactorWithAuthenticator");

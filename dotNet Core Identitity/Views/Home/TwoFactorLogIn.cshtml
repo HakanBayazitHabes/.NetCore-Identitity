@@ -1,0 +1,119 @@
+﻿@model TwoFactorLogInViewModel
+@{
+    ViewData["Title"] = "TwoFactorLogIn";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+@section Scripts
+{
+    <script type="text/javascript">
+
+        $("#sendMail").click(() => {
+            $.ajax({
+                type: "GET",
+                contentType: "application/json;charset=utf-8",
+                url: "./AgainSendEmail",
+                dataType: "json",
+                success: function (response) {
+                    if (response == true) {
+                        alert("Doğrulama kodu tekrar email adresinize gönderilmiştir.")
+                    }
+                    else {
+                        alert("Beklenmedik bir hata meydana geldi")
+                    }
+                },
+                error: function () {
+                    alert("Beklenmedik bir hata meydana geldi")
+                }
+
+            })
+        });
+
+
+
+
+        $(document).ready(() => {
+            var timeLeft = parseInt("@ViewBag.timeLeft");
+
+            function makeTimer() {
+                var minutes = Math.floor(timeLeft / 60);
+                var seconds = Math.floor(timeLeft - (minutes * 60));
+
+                if (minutes < 10) { minutes = "0" + minutes };
+                if (seconds < 10) { seconds = "0" + seconds };
+
+                $("#minutes").html(minutes);
+                $("#seconds").html(seconds);
+                timeLeft--;
+                if (timeLeft == 0) {
+                    window.location.href = "/Home/Login/";
+                }
+            }
+
+            makeTimer();
+
+            setInterval(() => makeTimer(),1000 );
+        });
+    </script>
+}
+<div class="row">
+    <div class="col-md-4 offset-md-4">
+        <h4>İki adımlı Kimlik Doğrulama</h4>
+        <hr />
+
+        <form asp-action="TwoFactorLogIn" method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger">
+            </div>
+            <div class="form-group">
+                <label asp-for="VerificationCode"></label>
+                <input asp-for="VerificationCode" class="form-control" />
+                <span asp-validation-for="VerificationCode" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="checkbox" asp-for="IsRememberMe" /> Beni Hatırla
+            </div>
+
+            @if (Model.TwoFactorType == TwoFactor.MicrosoftGoogle)
+            {
+                <div class="form-group">
+                    <input type="checkbox" asp-for="IsRecoverCode" /> Kurtarma kodu girmek için bu kutucuğu işaretleyin
+                </div>
+            }
+            <div class="form-group">
+                <input type="submit" class="btn btn-success" value="Gönder" />
+
+                @if (Model.TwoFactorType == TwoFactor.Email)
+                {
+                    <input type="button" id="sendMail" class="btn btn-link" value="Tekrar email gönder"/>
+                }
+
+
+            </div>
+        </form>
+
+        @if (Model.TwoFactorType == TwoFactor.Email || Model.TwoFactorType == TwoFactor.Phone)
+        {
+            <div class="alert alert-primary">
+                <span class="text-primary" id="minutes"> </span> dakika <span class="text-primary" id="seconds"> </span> saniye kaldı.
+            </div>
+        }
+
+        <div class="alert alert-info">
+            @switch (Model.TwoFactorType)
+            {
+                case TwoFactor.Phone:
+                    <span>Telefona gelen sms kodunu bu alan giriniz.</span>
+                    break;
+                case TwoFactor.Email:
+                    <span>Email adresinize gelen kodu bu alana giriniz.</span>
+                    break;
+                case TwoFactor.MicrosoftGoogle:
+                    <span>Microsoft/Google Authenticator uygulamanızdaki kodu bu alan giriniz.</span>
+                    break;
+                default:
+                    break;
+            }
+        </div>
+
+    </div>
+</div>
+

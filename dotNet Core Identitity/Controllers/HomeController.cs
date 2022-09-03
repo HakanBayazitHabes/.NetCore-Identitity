@@ -1,5 +1,8 @@
-﻿using dotNet_Core_Identitity.Models;
+﻿using dotNet_Core_Identitity.Enums;
+using dotNet_Core_Identitity.Models;
+using dotNet_Core_Identitity.Service;
 using dotNet_Core_Identitity.ViewModels;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -12,9 +15,17 @@ namespace dotNet_Core_Identitity.Controllers
 {
     public class HomeController : BaseController
     {
-        public HomeController(UserManager<AppUser> userManager, SignInManager<AppUser> signInManager) : base(userManager, signInManager)
+        private readonly TwoFactorService _twoFactorService;
+        private readonly EmailSender _emailSender;
+        private readonly SmsSender _smsSender;
+        public HomeController(UserManager<AppUser> userManager, SignInManager<AppUser> signInManager, TwoFactorService twoFactorService, EmailSender emailSender,SmsSender smsSender) : base(userManager, signInManager)
         {
+            _twoFactorService = twoFactorService;
+            _emailSender = emailSender;
+            _smsSender = smsSender;
         }
+
+
         public IActionResult Index()
         {
             if (User.Identity.IsAuthenticated)
@@ -23,7 +34,7 @@ namespace dotNet_Core_Identitity.Controllers
             }
             return View();
         }
-        public IActionResult LogIn(string ReturnUrl)
+        public IActionResult LogIn(string ReturnUrl = "/")
         {
             TempData["ReturnUrl"] = ReturnUrl;
             return View();
@@ -47,19 +58,27 @@ namespace dotNet_Core_Identitity.Controllers
                         ModelState.AddModelError("", "Email adresiniz onaylanmamıştır.Lütfen epostanızı kontrol ediniz.");
                         return View(userlogin);
                     }
-                    await signInManager.SignOutAsync();
+                    bool userCheck = await userManager.CheckPasswordAsync(user, userlogin.Password);
 
-                    Microsoft.AspNetCore.Identity.SignInResult result = await signInManager.PasswordSignInAsync(user, userlogin.Password, userlogin.RememberMe, false);//son parametreye true yazarsak bu if'in altındaki else yazmamaıza gerek kalmıyor
-                    if (result.Succeeded)
+                    if (userCheck)
                     {
                         await userManager.ResetAccessFailedCountAsync(user);
+                        await signInManager.SignOutAsync();
 
-                        if (TempData["ReturnUrl"] != null)
+
+                        var result = await signInManager.PasswordSignInAsync(user, userlogin.Password, userlogin.RememberMe, false);//son parametreye true yazarsak bu if'in altındaki else yazmamaıza gerek kalmıyor
+                        if (result.RequiresTwoFactor)
+                        {
+                            if (user.TwoFactor == (int)TwoFactor.Email || user.TwoFactor == (int)(TwoFactor.Phone))
+                            {
+                                HttpContext.Session.Remove("currentTime");
+                        }
+                            return RedirectToAction("TwoFactorLogIn", "Home", new { ReturnUrl = TempData["ReturnUrl"].ToString() });
+                        }
+                        else
                         {
                             return Redirect(TempData["ReturnUrl"].ToString());
                         }
-                        return RedirectToAction("Index", "Member");
-
                     }
                     else
                     {
@@ -85,7 +104,92 @@ namespace dotNet_Core_Identitity.Controllers
             }
             return View(userlogin);
         }
+        public async Task<IActionResult> TwoFactorLogIn(string ReturnUrl = "/")
+        {
+            var user = await signInManager.GetTwoFactorAuthenticationUserAsync();//Giriş yaptığında Identity.TwoFactorUserId adında bir ıd oluşturur bu id'yi kontrol eder ,id'ye ait kullanıcıyı getirir.
+            TempData["ReturnUrl"] = ReturnUrl;
 
+            switch ((TwoFactor)user.TwoFactor)
+            {
+                case TwoFactor.Phone:
+                    if (_twoFactorService.TimeLeft(HttpContext)==0)
+                    {
+                        return RedirectToAction("LogIn");
+                    }
+                    ViewBag.timeLeft = _twoFactorService.TimeLeft(HttpContext);
+
+                    HttpContext.Session.SetString("codeVerification",_smsSender.Send(user.PhoneNumber));
+
+                    break;
+                case TwoFactor.Email:
+                    if (_twoFactorService.TimeLeft(HttpContext) == 0)
+                    {
+                        return RedirectToAction("LogIn");
+                    }
+
+                    ViewBag.timeLeft = _twoFactorService.TimeLeft(HttpContext);
+
+                    HttpContext.Session.SetString("codeVerification", _emailSender.Send(user.Email));
+                    break;
+
+            }
+            return View(new TwoFactorLogInViewModel() { TwoFactorType = (TwoFactor)user.TwoFactor, IsRecoverCode = false, IsRememberMe = false, VerificationCode = string.Empty });
+        }
+        [HttpPost]
+        public async Task<IActionResult> TwoFactorLogIn(TwoFactorLogInViewModel twoFactorLogInViewModel)
+        {
+            var user = await signInManager.GetTwoFactorAuthenticationUserAsync();//claims'lerdeki ideleriden kullanıcıyı bulur
+
+            ModelState.Clear();
+            bool IsSuccessAuth = false;
+
+            if (user.TwoFactor == (int)TwoFactor.MicrosoftGoogle)
+            {
+                Microsoft.AspNetCore.Identity.SignInResult result;
+
+                if (twoFactorLogInViewModel.IsRecoverCode)
+                {
+                    result = await signInManager.TwoFactorRecoveryCodeSignInAsync(twoFactorLogInViewModel.VerificationCode);//kurtarma kodları ile giriş
+                }
+                else
+                {
+                    result = await signInManager.TwoFactorAuthenticatorSignInAsync(twoFactorLogInViewModel.VerificationCode, twoFactorLogInViewModel.IsRememberMe, false);
+                }
+                if (result.Succeeded)
+                {
+                    IsSuccessAuth = true;
+                }
+                else
+                {
+                    ModelState.AddModelError("", "Doğrulama Kodu yanlış");
+                }
+            }
+            else if (user.TwoFactor == (int)TwoFactor.Email || user.TwoFactor == (int)TwoFactor.Phone)
+            {
+                ViewBag.timeLeft = _twoFactorService.TimeLeft(HttpContext);
+                if (twoFactorLogInViewModel.VerificationCode == HttpContext.Session.GetString("codeVerification"))
+                {
+                    await signInManager.SignOutAsync();
+
+                    await signInManager.SignInAsync(user, twoFactorLogInViewModel.IsRememberMe);
+                    HttpContext.Session.Remove("currentTime");
+                    HttpContext.Session.Remove("codeVerification");
+                    IsSuccessAuth = true;
+                }
+                else
+                {
+                    ModelState.AddModelError("", "Doğrulama kodu yanlış");
+                }
+            }
+
+            if (IsSuccessAuth)
+            {
+                return Redirect(TempData["ReturnUrl"].ToString());
+            }
+            twoFactorLogInViewModel.TwoFactorType = (TwoFactor)user.TwoFactor;
+            return View(twoFactorLogInViewModel);
+
+        }
 
         public IActionResult SignUp()
         {
@@ -334,6 +438,21 @@ namespace dotNet_Core_Identitity.Controllers
             return View();
         }
 
+        public JsonResult AgainSendEmail()
+        {
+            try
+            {
+                var user = signInManager.GetTwoFactorAuthenticationUserAsync().Result;
+                HttpContext.Session.SetString("codeVerification", _emailSender.Send(user.Email));
+                return Json(true);
+
+            }
+            catch (Exception)
+            {
+
+                return Json(false);
+            }
+        }
 
     }
 }

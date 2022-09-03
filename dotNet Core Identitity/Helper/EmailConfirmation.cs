@@ -16,9 +16,9 @@ namespace dotNet_Core_Identitity.Helper
             SmtpClient smtpClient = new SmtpClient("smtp.yandex.com", 587);
             smtpClient.EnableSsl = true;
             smtpClient.DeliveryMethod = SmtpDeliveryMethod.Network;
-            smtpClient.Credentials = new System.Net.NetworkCredential("questionautomation@yandex.com", "topnjkmpmuqbgcce");
+            smtpClient.Credentials = new System.Net.NetworkCredential("your email", "your password");
 
-            mail.From = new MailAddress("questionautomation@yandex.com");
+            mail.From = new MailAddress("your email");
             mail.To.Add(email);
 
 
